@@ -1,0 +1,58 @@
+{
+  "name": "aoh-run-selector",
+  "displayName": "AOH - Run Selector",
+  "description": "AOH - Rider-style launch configuration controls in the VS Code status bar.",
+  "version": "1.0.0",
+  "publisher": "Abyzz",
+  "icon": "media/aoh-logo-icon.png",
+  "license": "WTFPL",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.9.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "aoh.runSelector.run",
+        "title": "Run Selected Configuration",
+        "shortTitle": "Run",
+        "icon": "$(play)"
+      },
+      {
+        "command": "aoh.runSelector.debug",
+        "title": "Debug Selected Configuration",
+        "shortTitle": "Debug",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "aoh.runSelector.select",
+        "title": "Select Launch Configuration",
+        "shortTitle": "Select Launch",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "aoh.runSelector.stop",
+        "title": "Stop Running Configuration",
+        "shortTitle": "Stop",
+        "icon": "$(debug-stop)"
+      }
+    ]
+  }
+}
