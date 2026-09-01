@@ -1,7 +1,7 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
-const STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
-const LEGACY_STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
+const STORAGE_KEY = "aoh.runSelector.selectedConfiguration";
+const LEGACY_STORAGE_KEY = "aoh.runSelector.selectedConfiguration";
 
 interface LaunchChoice {
   name: string;
@@ -14,33 +14,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Separate status-bar items make this behave like a tiny toolbar while still
   // allowing the selected launch configuration label to change dynamically.
   const buildItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 105);
-  buildItem.name = 'AOH - Run Selector: Build';
-  buildItem.text = '$(tools)';
-  buildItem.command = 'aoh.runSelector.build';
-  buildItem.tooltip = 'Build workspace';
+  buildItem.name = "AOH - Run Selector: Build";
+  buildItem.text = "$(tools)";
+  buildItem.text = "$(aoh-build)";
+  buildItem.command = "aoh.runSelector.build";
+  buildItem.tooltip = "Build workspace";
 
   const runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 104);
-  runItem.name = 'AOH - Run Selector: Run';
-  runItem.text = '$(play)';
-  runItem.command = 'aoh.runSelector.run';
-  runItem.tooltip = 'Run selected launch configuration without debugging';
+  runItem.name = "AOH - Run Selector: Run";
+  runItem.text = "$(play)";
+  runItem.command = "aoh.runSelector.run";
+  runItem.tooltip = "Run selected launch configuration without debugging";
 
   const debugItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 103);
-  debugItem.name = 'AOH - Run Selector: Debug';
-  debugItem.text = '$(debug-alt)';
-  debugItem.command = 'aoh.runSelector.debug';
-  debugItem.tooltip = 'Debug selected launch configuration';
+  debugItem.name = "AOH - Run Selector: Debug";
+  debugItem.text = "$(debug-alt)";
+  debugItem.command = "aoh.runSelector.debug";
+  debugItem.tooltip = "Debug selected launch configuration";
 
   const selectorItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 102);
-  selectorItem.name = 'AOH - Run Selector: Launch Configuration';
-  selectorItem.command = 'aoh.runSelector.select';
-  selectorItem.tooltip = 'Select launch configuration';
+  selectorItem.name = "AOH - Run Selector: Launch Configuration";
+  selectorItem.command = "aoh.runSelector.select";
+  selectorItem.tooltip = "Select launch configuration";
 
   const stopItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 106);
-  stopItem.name = 'AOH - Run Selector: Stop';
-  stopItem.text = '$(debug-stop)';
-  stopItem.command = 'aoh.runSelector.stop';
-  stopItem.tooltip = 'Stop running launch configuration';
+  stopItem.name = "AOH - Run Selector: Stop";
+  stopItem.text = "$(debug-stop)";
+  stopItem.command = "aoh.runSelector.stop";
+  stopItem.tooltip = "Stop running launch configuration";
 
   context.subscriptions.push(buildItem, runItem, debugItem, selectorItem, stopItem);
 
@@ -71,40 +72,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('aoh.runSelector.build', async () => {
-      await vscode.commands.executeCommand('workbench.action.tasks.build');
+    vscode.commands.registerCommand("aoh.runSelector.build", async () => {
+      await vscode.commands.executeCommand("workbench.action.tasks.build");
     }),
 
-    vscode.commands.registerCommand('aoh.runSelector.select', async () => {
+    vscode.commands.registerCommand("aoh.runSelector.select", async () => {
       const choices = getLaunchChoices();
 
       if (choices.length === 0) {
-        const action = await vscode.window.showWarningMessage(
-          'No launch configurations found.',
-          'Open launch.json'
-        );
+        const action = await vscode.window.showWarningMessage("No launch configurations found.", "Open launch.json");
 
-        if (action === 'Open launch.json') {
-          await vscode.commands.executeCommand('workbench.action.debug.configure');
+        if (action === "Open launch.json") {
+          await vscode.commands.executeCommand("workbench.action.debug.configure");
         }
         return;
       }
 
-      const selectedKey = context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
-      const items = choices.map(choice => ({
+      const selectedKey =
+        context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
+      const items = choices.map((choice) => ({
         label: choice.name,
-        description: choice.folder?.name ?? 'Workspace',
-        detail: choice.configuration.type
-          ? `Debugger: ${choice.configuration.type}`
-          : undefined,
+        description: choice.folder?.name ?? "Workspace",
+        detail: choice.configuration.type ? `Debugger: ${choice.configuration.type}` : undefined,
         picked: choice.key === selectedKey,
-        choice
+        choice,
       }));
 
       const item = await vscode.window.showQuickPick(items, {
-        placeHolder: 'Select launch configuration',
+        placeHolder: "Select launch configuration",
         matchOnDescription: true,
-        matchOnDetail: true
+        matchOnDetail: true,
       });
 
       if (!item) {
@@ -115,15 +112,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await refreshUi();
     }),
 
-    vscode.commands.registerCommand('aoh.runSelector.run', async () => {
+    vscode.commands.registerCommand("aoh.runSelector.run", async () => {
       await startSelected(context, true);
     }),
 
-    vscode.commands.registerCommand('aoh.runSelector.debug', async () => {
+    vscode.commands.registerCommand("aoh.runSelector.debug", async () => {
       await startSelected(context, false);
     }),
 
-    vscode.commands.registerCommand('aoh.runSelector.stop', async () => {
+    vscode.commands.registerCommand("aoh.runSelector.stop", async () => {
       const activeSession = vscode.debug.activeDebugSession;
       if (activeSession) {
         await vscode.debug.stopDebugging(activeSession);
@@ -134,8 +131,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.debug.onDidTerminateDebugSession(refreshUi),
     vscode.debug.onDidChangeActiveDebugSession(refreshUi),
 
-    vscode.workspace.onDidChangeConfiguration(async event => {
-      if (event.affectsConfiguration('launch')) {
+    vscode.workspace.onDidChangeConfiguration(async (event) => {
+      if (event.affectsConfiguration("launch")) {
         await ensureValidSelection(context);
         await refreshUi();
       }
@@ -144,7 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.onDidChangeWorkspaceFolders(async () => {
       await ensureValidSelection(context);
       await refreshUi();
-    })
+    }),
   );
 
   await ensureValidSelection(context);
@@ -156,8 +153,8 @@ function getLaunchChoices(): LaunchChoice[] {
   const folders = vscode.workspace.workspaceFolders ?? [];
 
   for (const folder of folders) {
-    const launch = vscode.workspace.getConfiguration('launch', folder.uri);
-    const configurations = launch.get<vscode.DebugConfiguration[]>('configurations', []);
+    const launch = vscode.workspace.getConfiguration("launch", folder.uri);
+    const configurations = launch.get<vscode.DebugConfiguration[]>("configurations", []);
 
     for (const configuration of configurations) {
       if (!configuration?.name) {
@@ -168,15 +165,15 @@ function getLaunchChoices(): LaunchChoice[] {
         name: configuration.name,
         folder,
         configuration,
-        key: `${folder.uri.toString()}::${configuration.name}`
+        key: `${folder.uri.toString()}::${configuration.name}`,
       });
     }
   }
 
   // A multi-root .code-workspace file can also contain launch configurations.
   if (folders.length > 1 || vscode.workspace.workspaceFile) {
-    const launch = vscode.workspace.getConfiguration('launch');
-    const configurations = launch.get<vscode.DebugConfiguration[]>('configurations', []);
+    const launch = vscode.workspace.getConfiguration("launch");
+    const configurations = launch.get<vscode.DebugConfiguration[]>("configurations", []);
 
     for (const configuration of configurations) {
       if (!configuration?.name) {
@@ -184,11 +181,7 @@ function getLaunchChoices(): LaunchChoice[] {
       }
 
       if (
-        choices.some(
-          choice =>
-            choice.name === configuration.name &&
-            choice.configuration.type === configuration.type
-        )
+        choices.some((choice) => choice.name === configuration.name && choice.configuration.type === configuration.type)
       ) {
         continue;
       }
@@ -196,7 +189,7 @@ function getLaunchChoices(): LaunchChoice[] {
       choices.push({
         name: configuration.name,
         configuration,
-        key: `workspace::${configuration.name}`
+        key: `workspace::${configuration.name}`,
       });
     }
   }
@@ -204,12 +197,11 @@ function getLaunchChoices(): LaunchChoice[] {
   return choices;
 }
 
-async function getSelectedChoice(
-  context: vscode.ExtensionContext
-): Promise<LaunchChoice | undefined> {
+async function getSelectedChoice(context: vscode.ExtensionContext): Promise<LaunchChoice | undefined> {
   const choices = getLaunchChoices();
-  const selectedKey = context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
-  return choices.find(choice => choice.key === selectedKey) ?? choices[0];
+  const selectedKey =
+    context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
+  return choices.find((choice) => choice.key === selectedKey) ?? choices[0];
 }
 
 async function ensureValidSelection(context: vscode.ExtensionContext): Promise<void> {
@@ -220,28 +212,22 @@ async function ensureValidSelection(context: vscode.ExtensionContext): Promise<v
     return;
   }
 
-  const selectedKey = context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
-  if (!selectedKey || !choices.some(choice => choice.key === selectedKey)) {
+  const selectedKey =
+    context.workspaceState.get<string>(STORAGE_KEY) ?? context.workspaceState.get<string>(LEGACY_STORAGE_KEY);
+  if (!selectedKey || !choices.some((choice) => choice.key === selectedKey)) {
     await context.workspaceState.update(STORAGE_KEY, choices[0].key);
   }
 }
 
-async function startSelected(
-  context: vscode.ExtensionContext,
-  noDebug: boolean
-): Promise<void> {
+async function startSelected(context: vscode.ExtensionContext, noDebug: boolean): Promise<void> {
   const selected = await getSelectedChoice(context);
 
   if (!selected) {
-    await vscode.commands.executeCommand('aoh.runSelector.select');
+    await vscode.commands.executeCommand("aoh.runSelector.select");
     return;
   }
 
-  const started = await vscode.debug.startDebugging(
-    selected.folder,
-    selected.configuration,
-    { noDebug }
-  );
+  const started = await vscode.debug.startDebugging(selected.folder, selected.configuration, { noDebug });
 
   if (!started) {
     void vscode.window.showErrorMessage(`Could not start '${selected.name}'.`);
@@ -250,7 +236,7 @@ async function startSelected(
 
 function escapeStatusBarText(value: string): string {
   // '$(' begins a codicon expression in status bar text.
-  return value.replace(/\$\(/g, '\\$(');
+  return value.replace(/\$\(/g, "\\$(");
 }
 
 export function deactivate(): void {}
