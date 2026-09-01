@@ -2,10 +2,10 @@
   "name": "aoh-run-selector",
   "displayName": "AOH - Run Selector",
   "description": "AOH - Rider-style launch configuration controls in the VS Code status bar.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "Abyzz",
   "icon": "media/aoh-logo-icon.png",
-  "license": "WTFPL",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -29,6 +29,12 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "aoh.runSelector.build",
+        "title": "Build Workspace",
+        "shortTitle": "Build",
+        "icon": "$(tools)"
+      },
       {
         "command": "aoh.runSelector.run",
         "title": "Run Selected Configuration",

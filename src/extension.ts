@@ -13,6 +13,12 @@ interface LaunchChoice {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // Separate status-bar items make this behave like a tiny toolbar while still
   // allowing the selected launch configuration label to change dynamically.
+  const buildItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 105);
+  buildItem.name = 'AOH - Run Selector: Build';
+  buildItem.text = '$(tools)';
+  buildItem.command = 'aoh.runSelector.build';
+  buildItem.tooltip = 'Build workspace';
+
   const runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 104);
   runItem.name = 'AOH - Run Selector: Run';
   runItem.text = '$(play)';
@@ -30,13 +36,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   selectorItem.command = 'aoh.runSelector.select';
   selectorItem.tooltip = 'Select launch configuration';
 
-  const stopItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 105);
+  const stopItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 106);
   stopItem.name = 'AOH - Run Selector: Stop';
   stopItem.text = '$(debug-stop)';
   stopItem.command = 'aoh.runSelector.stop';
   stopItem.tooltip = 'Stop running launch configuration';
 
-  context.subscriptions.push(runItem, debugItem, selectorItem, stopItem);
+  context.subscriptions.push(buildItem, runItem, debugItem, selectorItem, stopItem);
 
   async function refreshUi(): Promise<void> {
     const selected = await getSelectedChoice(context);
@@ -47,6 +53,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       : `Select launch $(chevron-down)`;
 
     selectorItem.show();
+    buildItem.show();
 
     if (selected && !isRunning) {
       runItem.show();
@@ -64,6 +71,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('aoh.runSelector.build', async () => {
+      await vscode.commands.executeCommand('workbench.action.tasks.build');
+    }),
+
     vscode.commands.registerCommand('aoh.runSelector.select', async () => {
       const choices = getLaunchChoices();
 
