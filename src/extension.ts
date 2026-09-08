@@ -15,9 +15,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // allowing the selected launch configuration label to change dynamically.
   const buildItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 105);
   buildItem.name = 'AOH - Run Selector: Build';
-  buildItem.text = '$(tools)';
+  buildItem.text = '$(aoh-build)';
   buildItem.command = 'aoh.runSelector.build';
-  buildItem.tooltip = 'Build workspace';
+  buildItem.tooltip = 'Build selected launch configuration';
 
   const runItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 104);
   runItem.name = 'AOH - Run Selector: Run';
@@ -72,7 +72,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   context.subscriptions.push(
     vscode.commands.registerCommand('aoh.runSelector.build', async () => {
-      await vscode.commands.executeCommand('workbench.action.tasks.build');
+      await buildSelected(context);
     }),
 
     vscode.commands.registerCommand('aoh.runSelector.select', async () => {
@@ -224,6 +224,54 @@ async function ensureValidSelection(context: vscode.ExtensionContext): Promise<v
   if (!selectedKey || !choices.some(choice => choice.key === selectedKey)) {
     await context.workspaceState.update(STORAGE_KEY, choices[0].key);
   }
+}
+
+async function buildSelected(context: vscode.ExtensionContext): Promise<void> {
+  const selected = await getSelectedChoice(context);
+
+  if (!selected) {
+    await vscode.commands.executeCommand('aoh.runSelector.select');
+    return;
+  }
+
+  const preLaunchTask = selected.configuration.preLaunchTask;
+  if (typeof preLaunchTask !== 'string' || preLaunchTask.trim().length === 0) {
+    void vscode.window.showWarningMessage(
+      `No preLaunchTask configured for '${selected.name}'.`
+    );
+    return;
+  }
+
+  const tasks = await vscode.tasks.fetchTasks();
+  const matchingTasks = tasks.filter(task => task.name === preLaunchTask);
+
+  if (matchingTasks.length === 0) {
+    void vscode.window.showErrorMessage(
+      `Build task '${preLaunchTask}' for '${selected.name}' was not found.`
+    );
+    return;
+  }
+
+  const task =
+    matchingTasks.find(candidate =>
+      isTaskInWorkspaceFolder(candidate, selected.folder)
+    ) ?? matchingTasks[0];
+
+  await vscode.tasks.executeTask(task);
+}
+
+function isTaskInWorkspaceFolder(
+  task: vscode.Task,
+  folder: vscode.WorkspaceFolder | undefined
+): boolean {
+  if (!folder) {
+    return task.scope === vscode.TaskScope.Workspace;
+  }
+
+  return (
+    typeof task.scope === 'object' &&
+    task.scope.uri.toString() === folder.uri.toString()
+  );
 }
 
 async function startSelected(

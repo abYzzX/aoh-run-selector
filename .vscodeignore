@@ -1,4 +1,5 @@
 .vscode/**
+.gitea/**
 src/**
 tsconfig.json
 **/*.map
