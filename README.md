@@ -48,3 +48,26 @@ Example:
 - At least one launch configuration in `.vscode/launch.json`
 - A `preLaunchTask` on a launch configuration if it should be buildable from the status bar
 - The debugger extension required by the selected launch configuration
+
+## Development
+
+Install dependencies and run the test suite:
+
+```bash
+npm install
+npm test
+```
+
+`npm test` compiles the extension and runs the VS Code-independent unit tests with Node's built-in test runner.
+
+## Project documentation
+
+- `AOH-RULES.md` — shared rules used across AOH extension repositories
+- `AGENT.md` — project-specific instructions for coding agents
+- `EXTENSION-DESIGN.md` — architecture, behavior, constraints, and deliberate design decisions
+- `CONTRIBUTING.md` — contribution workflow
+- `CHANGELOG.md` — released and unreleased user-visible changes
+
+## License
+
+MIT. See `LICENSE`.

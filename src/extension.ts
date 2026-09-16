@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { createLaunchChoiceKey, escapeStatusBarText, isDuplicateLaunchChoice } from './runSelectorUtils';
 
 const STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
 const LEGACY_STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
@@ -168,7 +169,7 @@ function getLaunchChoices(): LaunchChoice[] {
         name: configuration.name,
         folder,
         configuration,
-        key: `${folder.uri.toString()}::${configuration.name}`
+        key: createLaunchChoiceKey(folder.uri.toString(), configuration.name)
       });
     }
   }
@@ -184,10 +185,9 @@ function getLaunchChoices(): LaunchChoice[] {
       }
 
       if (
-        choices.some(
-          choice =>
-            choice.name === configuration.name &&
-            choice.configuration.type === configuration.type
+        isDuplicateLaunchChoice(
+          choices.map(choice => ({ name: choice.name, type: choice.configuration.type })),
+          configuration
         )
       ) {
         continue;
@@ -196,7 +196,7 @@ function getLaunchChoices(): LaunchChoice[] {
       choices.push({
         name: configuration.name,
         configuration,
-        key: `workspace::${configuration.name}`
+        key: createLaunchChoiceKey('workspace', configuration.name)
       });
     }
   }
@@ -294,11 +294,6 @@ async function startSelected(
   if (!started) {
     void vscode.window.showErrorMessage(`Could not start '${selected.name}'.`);
   }
-}
-
-function escapeStatusBarText(value: string): string {
-  // '$(' begins a codicon expression in status bar text.
-  return value.replace(/\$\(/g, '\\$(');
 }
 
 export function deactivate(): void {}
