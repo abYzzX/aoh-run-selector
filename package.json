@@ -67,6 +67,18 @@
         "title": "Stop Running Configuration",
         "shortTitle": "Stop",
         "icon": "$(debug-stop)"
+      },
+      {
+        "command": "aoh.runSelector.restart",
+        "title": "Restart Selected Configuration",
+        "shortTitle": "Restart",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "aoh.runSelector.restartDebug",
+        "title": "Restart Selected Configuration in Debug Mode",
+        "shortTitle": "Restart in Debug Mode",
+        "icon": "$(debug-alt)"
       }
     ],
     "icons": {

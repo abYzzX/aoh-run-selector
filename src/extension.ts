@@ -12,6 +12,20 @@ interface LaunchChoice {
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const sessions = new Map<string, vscode.DebugSession>();
+  const restarting = new Set<string>();
+  if (vscode.debug.activeDebugSession) {
+    sessions.set(vscode.debug.activeDebugSession.id, vscode.debug.activeDebugSession);
+  }
+
+  function selectedSessions(selected: LaunchChoice): vscode.DebugSession[] {
+    return [...sessions.values()].filter(session =>
+      !session.parentSession &&
+      session.configuration.name === selected.name &&
+      session.workspaceFolder?.uri.toString() === selected.folder?.uri.toString()
+    );
+  }
+
   // Separate status-bar items make this behave like a tiny toolbar while still
   // allowing the selected launch configuration label to change dynamically.
   const buildItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 105);
@@ -47,7 +61,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   async function refreshUi(): Promise<void> {
     const selected = await getSelectedChoice(context);
-    const isRunning = vscode.debug.activeDebugSession !== undefined;
+    const isRunning = selected !== undefined && selectedSessions(selected).length > 0;
 
     selectorItem.text = selected
       ? `${escapeStatusBarText(selected.name)} $(chevron-down)`
@@ -56,7 +70,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     selectorItem.show();
     buildItem.show();
 
-    if (selected && !isRunning) {
+    runItem.text = isRunning ? '$(debug-restart)' : '$(play)';
+    runItem.command = isRunning ? 'aoh.runSelector.restart' : 'aoh.runSelector.run';
+    runItem.name = `AOH - Run Selector: ${isRunning ? 'Restart' : 'Run'}`;
+    runItem.tooltip = isRunning
+      ? 'Restart selected launch configuration without debugging'
+      : 'Run selected launch configuration without debugging';
+    debugItem.text = isRunning ? '$(debug-restart) $(debug-alt)' : '$(debug-alt)';
+    debugItem.command = isRunning ? 'aoh.runSelector.restartDebug' : 'aoh.runSelector.debug';
+    debugItem.name = `AOH - Run Selector: ${isRunning ? 'Restart in Debug Mode' : 'Debug'}`;
+    debugItem.tooltip = isRunning
+      ? 'Restart selected launch configuration in debug mode'
+      : 'Debug selected launch configuration';
+
+    if (selected && !restarting.has(selected.key)) {
       runItem.show();
       debugItem.show();
     } else {
@@ -68,6 +95,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       stopItem.show();
     } else {
       stopItem.hide();
+    }
+  }
+
+  async function restartSelected(noDebug: boolean): Promise<void> {
+    const selected = await getSelectedChoice(context);
+    if (!selected || restarting.has(selected.key)) {
+      return;
+    }
+    const running = selectedSessions(selected);
+    if (running.length === 0) {
+      return;
+    }
+
+    restarting.add(selected.key);
+    await refreshUi();
+    try {
+      await Promise.all(running.map(stopSession));
+      await startChoice(selected, noDebug);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Could not restart '${selected.name}': ${String(error)}`);
+    } finally {
+      restarting.delete(selected.key);
+      await refreshUi();
     }
   }
 
@@ -125,14 +175,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('aoh.runSelector.stop', async () => {
-      const activeSession = vscode.debug.activeDebugSession;
-      if (activeSession) {
-        await vscode.debug.stopDebugging(activeSession);
+      const selected = await getSelectedChoice(context);
+      if (selected) {
+        await Promise.all(selectedSessions(selected).map(session => vscode.debug.stopDebugging(session)));
       }
     }),
 
-    vscode.debug.onDidStartDebugSession(refreshUi),
-    vscode.debug.onDidTerminateDebugSession(refreshUi),
+    vscode.commands.registerCommand('aoh.runSelector.restart', () => restartSelected(true)),
+    vscode.commands.registerCommand('aoh.runSelector.restartDebug', () => restartSelected(false)),
+
+    vscode.debug.onDidStartDebugSession(session => {
+      sessions.set(session.id, session);
+      void refreshUi();
+    }),
+    vscode.debug.onDidTerminateDebugSession(session => {
+      sessions.delete(session.id);
+      void refreshUi();
+    }),
     vscode.debug.onDidChangeActiveDebugSession(refreshUi),
 
     vscode.workspace.onDidChangeConfiguration(async event => {
@@ -285,6 +344,33 @@ async function startSelected(
     return;
   }
 
+  await startChoice(selected, noDebug);
+}
+
+function stopSession(session: vscode.DebugSession): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const listener = vscode.debug.onDidTerminateDebugSession(terminated => {
+      if (terminated.id === session.id) {
+        cleanup();
+        resolve();
+      }
+    });
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Timed out waiting for the running session to stop.'));
+    }, 30000);
+    function cleanup(): void {
+      clearTimeout(timeout);
+      listener.dispose();
+    }
+    Promise.resolve(vscode.debug.stopDebugging(session)).catch(error => {
+      cleanup();
+      reject(error);
+    });
+  });
+}
+
+async function startChoice(selected: LaunchChoice, noDebug: boolean): Promise<void> {
   const started = await vscode.debug.startDebugging(
     selected.folder,
     selected.configuration,
