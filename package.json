@@ -4,7 +4,7 @@
   "description": "AOH - Rider-style launch configuration controls in the VS Code status bar.",
   "version": "0.0.0",
   "publisher": "AbYzzX",
-  "icon": "media/aoh-rs-icon.png",
+  "icon": "media/aoh-run-selector.png",
   "license": "MIT",
     "repository": {
     "type": "git",

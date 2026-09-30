@@ -2,6 +2,10 @@
 
 All notable user-visible changes to AOH Run Selector are documented here.
 
+## 0.1.5
+
+- Update icon
+
 ## 0.1.4
 
 - Run Selected Configuration now starts the selected application as a normal process in an integrated terminal instead of going through VS Code's debug API with `noDebug`. Running no longer starts `vsdbg`; only Debug Selected Configuration uses the debugger.
