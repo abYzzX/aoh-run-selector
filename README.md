@@ -15,13 +15,13 @@ It is intended for projects with several launch configurations where repeatedly 
 - Stop the selected running configuration directly from the status bar
 - Restart the selected running configuration with or without debugging
 - Remembers the selected configuration per workspace
-- Uses VS Code's normal debugging API
+- Run starts the selected application without a debugger; Debug uses VS Code's normal debugging API
 
 ## Usage
 
 The status bar shows the currently selected launch configuration. Use the selector to choose another configuration from the workspace's `.vscode/launch.json` file.
 
-The Build action runs only the selected configuration's `preLaunchTask`; it does not start or switch the launch configuration. The Run and Debug actions start that configuration through VS Code's standard debugging infrastructure. While the selected configuration is running, the launcher exposes Stop, Restart (without debugging), and Restart in Debug Mode actions. Restart waits for the existing session to terminate before launching the selected configuration in the requested mode.
+The Build action runs only the selected configuration's `preLaunchTask`; it does not start or switch the launch configuration. Run executes the selected configuration's `preLaunchTask` and starts the application normally in an integrated terminal, without `vsdbg`. Debug starts the selected configuration through VS Code's debugging infrastructure. While the selected configuration is running, the launcher exposes Stop, Restart (without debugging), and Restart in Debug Mode actions. Restart waits for the existing session to terminate before launching the selected configuration in the requested mode.
 
 ## Configuration
 

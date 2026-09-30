@@ -3,6 +3,7 @@ import { createLaunchChoiceKey, escapeStatusBarText, isDuplicateLaunchChoice } f
 
 const STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
 const LEGACY_STORAGE_KEY = 'aoh.runSelector.selectedConfiguration';
+const runTerminalsByKey = new Map<string, vscode.Terminal>();
 
 interface LaunchChoice {
   name: string;
@@ -61,7 +62,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   async function refreshUi(): Promise<void> {
     const selected = await getSelectedChoice(context);
-    const isRunning = selected !== undefined && selectedSessions(selected).length > 0;
+    const isRunning = selected !== undefined && (
+      selectedSessions(selected).length > 0 || runTerminalsByKey.has(selected.key)
+    );
 
     selectorItem.text = selected
       ? `${escapeStatusBarText(selected.name)} $(chevron-down)`
@@ -98,21 +101,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
   }
 
-  async function restartSelected(noDebug: boolean): Promise<void> {
+  async function restartSelected(debug: boolean): Promise<void> {
     const selected = await getSelectedChoice(context);
     if (!selected || restarting.has(selected.key)) {
       return;
     }
-    const running = selectedSessions(selected);
-    if (running.length === 0) {
+    const runningSessions = selectedSessions(selected);
+    const runningTerminal = runTerminalsByKey.get(selected.key);
+    if (runningSessions.length === 0 && !runningTerminal) {
       return;
     }
 
     restarting.add(selected.key);
     await refreshUi();
     try {
-      await Promise.all(running.map(stopSession));
-      await startChoice(selected, noDebug);
+      await stopChoice(selected, runningSessions, runningTerminal);
+      if (debug) {
+        await startDebugChoice(selected);
+      } else {
+        await startRunChoice(selected);
+      }
     } catch (error) {
       void vscode.window.showErrorMessage(`Could not restart '${selected.name}': ${String(error)}`);
     } finally {
@@ -167,22 +175,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
 
     vscode.commands.registerCommand('aoh.runSelector.run', async () => {
-      await startSelected(context, true);
+      await startSelected(context, false);
+      await refreshUi();
     }),
 
     vscode.commands.registerCommand('aoh.runSelector.debug', async () => {
-      await startSelected(context, false);
+      await startSelected(context, true);
     }),
 
     vscode.commands.registerCommand('aoh.runSelector.stop', async () => {
       const selected = await getSelectedChoice(context);
       if (selected) {
-        await Promise.all(selectedSessions(selected).map(session => vscode.debug.stopDebugging(session)));
+        await stopChoice(selected, selectedSessions(selected), runTerminalsByKey.get(selected.key));
+        await refreshUi();
       }
     }),
 
-    vscode.commands.registerCommand('aoh.runSelector.restart', () => restartSelected(true)),
-    vscode.commands.registerCommand('aoh.runSelector.restartDebug', () => restartSelected(false)),
+    vscode.commands.registerCommand('aoh.runSelector.restart', () => restartSelected(false)),
+    vscode.commands.registerCommand('aoh.runSelector.restartDebug', () => restartSelected(true)),
 
     vscode.debug.onDidStartDebugSession(session => {
       sessions.set(session.id, session);
@@ -193,6 +203,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       void refreshUi();
     }),
     vscode.debug.onDidChangeActiveDebugSession(refreshUi),
+    vscode.window.onDidCloseTerminal(terminal => {
+      for (const [key, runningTerminal] of runTerminalsByKey) {
+        if (runningTerminal === terminal) {
+          runTerminalsByKey.delete(key);
+          void refreshUi();
+          break;
+        }
+      }
+    }),
 
     vscode.workspace.onDidChangeConfiguration(async event => {
       if (event.affectsConfiguration('launch')) {
@@ -335,7 +354,7 @@ function isTaskInWorkspaceFolder(
 
 async function startSelected(
   context: vscode.ExtensionContext,
-  noDebug: boolean
+  debug: boolean
 ): Promise<void> {
   const selected = await getSelectedChoice(context);
 
@@ -344,10 +363,149 @@ async function startSelected(
     return;
   }
 
-  await startChoice(selected, noDebug);
+  if (debug) {
+    await startDebugChoice(selected);
+  } else {
+    await startRunChoice(selected);
+  }
 }
 
-function stopSession(session: vscode.DebugSession): Promise<void> {
+async function executePreLaunchTask(selected: LaunchChoice): Promise<boolean> {
+  const preLaunchTask = selected.configuration.preLaunchTask;
+  if (typeof preLaunchTask !== 'string' || preLaunchTask.trim().length === 0) {
+    return true;
+  }
+
+  const tasks = await vscode.tasks.fetchTasks();
+  const matchingTasks = tasks.filter(task => task.name === preLaunchTask);
+  if (matchingTasks.length === 0) {
+    void vscode.window.showErrorMessage(
+      `Pre-launch task '${preLaunchTask}' for '${selected.name}' was not found.`
+    );
+    return false;
+  }
+
+  const task = matchingTasks.find(candidate => isTaskInWorkspaceFolder(candidate, selected.folder)) ?? matchingTasks[0];
+  const execution = await vscode.tasks.executeTask(task);
+
+  return await new Promise<boolean>(resolve => {
+    const processListener = vscode.tasks.onDidEndTaskProcess(event => {
+      if (event.execution !== execution) {
+        return;
+      }
+      cleanup();
+      if (event.exitCode === 0 || event.exitCode === undefined) {
+        resolve(true);
+      } else {
+        void vscode.window.showErrorMessage(
+          `Pre-launch task '${preLaunchTask}' failed with exit code ${event.exitCode}.`
+        );
+        resolve(false);
+      }
+    });
+    const taskListener = vscode.tasks.onDidEndTask(event => {
+      if (event.execution !== execution) {
+        return;
+      }
+      // Tasks without a process event (for example custom task providers) still need to unblock Run.
+      setTimeout(() => {
+        cleanup();
+        resolve(true);
+      }, 0);
+    });
+    function cleanup(): void {
+      processListener.dispose();
+      taskListener.dispose();
+    }
+  });
+}
+
+function resolveLaunchValue(value: string, selected: LaunchChoice): string {
+  const workspaceFolder = selected.folder?.uri.fsPath ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+  return value
+    .replace(/\$\{workspaceFolder\}/g, workspaceFolder)
+    .replace(/\$\{workspaceFolderBasename\}/g, selected.folder?.name ?? '');
+}
+
+function runTerminalOptions(selected: LaunchChoice): vscode.TerminalOptions | undefined {
+  const configuration = selected.configuration;
+  if (configuration.request !== 'launch') {
+    void vscode.window.showErrorMessage(`'${selected.name}' is not a launch configuration.`);
+    return undefined;
+  }
+
+  const args = Array.isArray(configuration.args)
+    ? configuration.args.map((arg: unknown) => resolveLaunchValue(String(arg), selected))
+    : [];
+  const projectPath = typeof configuration.projectPath === 'string'
+    ? resolveLaunchValue(configuration.projectPath, selected)
+    : undefined;
+  const program = typeof configuration.program === 'string'
+    ? resolveLaunchValue(configuration.program, selected)
+    : undefined;
+
+  if (!program && !projectPath) {
+    void vscode.window.showErrorMessage(
+      `Run without debugging requires either 'program' or 'projectPath' in launch configuration '${selected.name}'.`
+    );
+    return undefined;
+  }
+  const cwd = typeof configuration.cwd === 'string'
+    ? resolveLaunchValue(configuration.cwd, selected)
+    : selected.folder?.uri.fsPath;
+  const env = configuration.env && typeof configuration.env === 'object'
+    ? Object.fromEntries(Object.entries(configuration.env).map(([key, value]) => [
+        key,
+        value === null || value === undefined ? null : resolveLaunchValue(String(value), selected)
+      ]))
+    : undefined;
+
+  if (projectPath) {
+    return {
+      name: selected.name,
+      cwd,
+      env,
+      shellPath: 'dotnet',
+      shellArgs: ['run', '--project', projectPath, '--', ...args],
+      iconPath: new vscode.ThemeIcon('play')
+    };
+  }
+
+  const executable = program!;
+  const isDll = executable.toLowerCase().endsWith('.dll');
+  return {
+    name: selected.name,
+    cwd,
+    env,
+    shellPath: isDll ? 'dotnet' : executable,
+    shellArgs: isDll ? [executable, ...args] : args,
+    iconPath: new vscode.ThemeIcon('play')
+  };
+}
+
+async function startRunChoice(selected: LaunchChoice): Promise<void> {
+  const options = runTerminalOptions(selected);
+  if (!options) {
+    return;
+  }
+
+  if (!await executePreLaunchTask(selected)) {
+    return;
+  }
+
+  const terminal = vscode.window.createTerminal(options);
+  runTerminalsByKey.set(selected.key, terminal);
+  terminal.show(true);
+}
+
+async function startDebugChoice(selected: LaunchChoice): Promise<void> {
+  const started = await vscode.debug.startDebugging(selected.folder, selected.configuration);
+  if (!started) {
+    void vscode.window.showErrorMessage(`Could not debug '${selected.name}'.`);
+  }
+}
+
+async function stopSession(session: vscode.DebugSession): Promise<void> {
   return new Promise((resolve, reject) => {
     const listener = vscode.debug.onDidTerminateDebugSession(terminated => {
       if (terminated.id === session.id) {
@@ -357,7 +515,7 @@ function stopSession(session: vscode.DebugSession): Promise<void> {
     });
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error('Timed out waiting for the running session to stop.'));
+      reject(new Error('Timed out waiting for the debug session to stop.'));
     }, 30000);
     function cleanup(): void {
       clearTimeout(timeout);
@@ -370,16 +528,16 @@ function stopSession(session: vscode.DebugSession): Promise<void> {
   });
 }
 
-async function startChoice(selected: LaunchChoice, noDebug: boolean): Promise<void> {
-  const started = await vscode.debug.startDebugging(
-    selected.folder,
-    selected.configuration,
-    { noDebug }
-  );
-
-  if (!started) {
-    void vscode.window.showErrorMessage(`Could not start '${selected.name}'.`);
+async function stopChoice(
+  selected: LaunchChoice,
+  sessions: vscode.DebugSession[],
+  terminal: vscode.Terminal | undefined
+): Promise<void> {
+  if (terminal) {
+    terminal.dispose();
+    runTerminalsByKey.delete(selected.key);
   }
+  await Promise.all(sessions.map(stopSession));
 }
 
 export function deactivate(): void {}

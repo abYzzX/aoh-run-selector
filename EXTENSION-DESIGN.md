@@ -31,7 +31,7 @@ Build executes only the selected configuration's `preLaunchTask`. It resolves th
 
 ## Run and Debug behavior
 
-Both actions call `vscode.debug.startDebugging`. Run sets `noDebug`; Debug does not. This deliberately delegates debugger-specific behavior to VS Code and the debugger extension declared by the launch configuration.
+Run and Debug deliberately use different execution paths. **Run must never call `vscode.debug.startDebugging`**: it executes the selected configuration's `preLaunchTask` and then starts the configured application as a normal integrated-terminal process. A DLL `program` is started with `dotnet <program>`, an executable `program` is started directly, and C# Dev Kit `projectPath` configurations use `dotnet run --project <projectPath>`. This guarantees that Run does not start `vsdbg`. Debug alone uses `vscode.debug.startDebugging` and therefore the debugger declared by the launch configuration.
 
 ## Selection behavior
 
@@ -47,4 +47,4 @@ Release/CI infrastructure is not part of this extension repository. The reposito
 
 ## Known limitations
 
-The active-running state currently follows VS Code's active debug session globally. Restart is documented as planned behavior and is not yet implemented in this baseline.
+Normal runs are tracked by their integrated terminal; debug runs are tracked by VS Code debug sessions. Stop and Restart operate on whichever execution mode is active for the selected configuration.

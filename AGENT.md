@@ -10,7 +10,7 @@ AOH Run Selector provides compact Rider-style launch controls in the VS Code sta
 
 - Do not introduce a second run-configuration format. `.vscode/launch.json` remains the source of truth.
 - Build means executing the selected launch configuration's `preLaunchTask`; it must not silently invoke an unrelated workspace build.
-- Run and Debug must use VS Code's debugging API and preserve the selected launch configuration.
+- Run and Debug are intentionally different: Run must never use `vscode.debug.startDebugging` or start `vsdbg`; it starts the selected application as a normal process after its `preLaunchTask`. Debug uses VS Code's debugging API.
 - Keep the status-bar UI compact and predictable.
 - Selection is workspace-scoped and must remain valid when launch configuration or workspace folders change.
 - Multi-root workspace behavior must not collapse distinct folder-scoped launch configurations.
@@ -19,7 +19,7 @@ AOH Run Selector provides compact Rider-style launch controls in the VS Code sta
 
 ## Current planned behavior
 
-A running configuration should expose both Stop and Restart controls. Restart must work for both normal Run and Debug and restart the same selected configuration in the same mode. This is planned behavior until implemented and released.
+A running configuration exposes Stop and Restart controls. Restart must work for both normal Run and Debug and restart the same selected configuration in the requested mode. Normal Run processes are tracked separately from debug sessions.
 
 ## Documentation
 
